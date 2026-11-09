@@ -83,7 +83,7 @@
     shelfVariant: {},
     heroTracks: [],
     heroCopy: U.dayOfYear() % HERO_COPY.length,
-    search: { key: "", q: "", src: "kw", loading: false, results: [], error: "", token: 0 },
+    search: { key: "", q: "", src: "kw", loading: false, results: [], error: "", token: 0, page: 1, loadingMore: false, exhausted: false, moreError: "" },
     lyricsIndex: -1,
     lastPbArt: "",
     lastNpArt: "",
@@ -538,10 +538,18 @@
       const note = src === "lx:all"
         ? "扩展音源会合并所有可用脚本的搜索结果；单个脚本失效时会被跳过。"
         : src === "kw"
-          ? "酷我音源 · 播放地址自动匹配 320K / 无损。"
+          ? "酷我音源 · 播放地址自动匹配 320K / 无损；公开接口单次最多返回 10 首。"
           : src === "wy"
             ? "网易云原生音源 · 免费曲目直接播放，VIP 或失效时自动匹配酷我。"
             : "QQ 音乐原生音源 · 免费曲目优先 320K，VIP 或失效时自动匹配酷我。";
+
+      const more = items.length && !loading && !error && src !== "lx:all" && src !== "kw" && !state.exhausted
+        ? `<div class="search-more">` +
+          (state.moreError ? `<span class="search-more-note">${esc(state.moreError)}</span>` : "") +
+          `<button class="btn btn-quiet" data-action="loadMore"${state.loadingMore ? " disabled" : ""}>` +
+          (state.loadingMore ? "正在加载…" : state.moreError ? "重试" : "加载更多") +
+          `</button></div>`
+        : "";
 
       body = `<div class="results-head"><h2>“${esc(q)}”</h2>` +
         (loading ? `<span class="meta">正在搜索…</span>` : `<span class="meta">${items.length} 首 · ${esc(sourceLabel(src))}</span>`) +
@@ -553,7 +561,7 @@
           : error
             ? `<div class="empty"><div class="empty-icon"><svg class="icon"><use href="#i-search"/></svg></div><h3>没有搜到</h3><p>${esc(error)}</p><button class="btn btn-quiet" data-action="retrySearch">重试</button></div>`
             : items.length
-              ? tracklistHTML(items, "search")
+              ? tracklistHTML(items, "search") + more
               : emptyHTML("i-search", "输入关键词开始搜索", "试试歌名、歌手，或者一句歌词。", "", ""));
     }
 
@@ -581,17 +589,49 @@
     const key = `${src}|${q}`;
     if (ui.search.key === key && (ui.search.loading || ui.search.results.length || ui.search.error)) return;
     const token = ++ui.search.token;
-    ui.search = { key, q, src, loading: true, results: [], error: "", token };
+    ui.search = { key, q, src, loading: true, results: [], error: "", token, page: 1, loadingMore: false, exhausted: false, moreError: "" };
     if (ui.route.name === "search") renderSearchPage();
     try {
-      const results = await JM.api.search(src, q);
+      const results = await JM.api.search(src, q, 1);
       if (token !== ui.search.token) return;
-      ui.search = { key, q, src, loading: false, results, error: "", token };
+      ui.search = { key, q, src, loading: false, results, error: "", token, page: 1, loadingMore: false, exhausted: false, moreError: "" };
     } catch (err) {
       if (token !== ui.search.token) return;
-      ui.search = { key, q, src, loading: false, results: [], error: (err && err.message) || "搜索失败，请稍后再试", token };
+      ui.search = { key, q, src, loading: false, results: [], error: (err && err.message) || "搜索失败，请稍后再试", token, page: 1, loadingMore: false, exhausted: false, moreError: "" };
     }
     if (ui.route.name === "search" && ui.route.query.get("q") === q) renderSearchPage();
+  }
+
+  async function loadMoreSearch() {
+    const s = ui.search;
+    if (!s.results.length || s.loading || s.loadingMore || s.exhausted) return;
+    if (s.src === "lx:all" || s.src === "kw") return;
+    const token = s.token;
+    s.loadingMore = true;
+    s.moreError = "";
+    const keepTop = view.scrollTop;
+    renderSearchPage();
+    view.scrollTop = keepTop;
+    try {
+      const next = await JM.api.search(s.src, s.q, s.page + 1);
+      if (token !== ui.search.token) return;
+      const state = ui.search;
+      const seen = new Set(state.results.map((t) => t.key));
+      const added = next.filter((t) => !seen.has(t.key));
+      ui.search = {
+        ...state,
+        loadingMore: false,
+        results: state.results.concat(added),
+        page: state.page + 1,
+        exhausted: next.length === 0,
+      };
+    } catch (err) {
+      if (token !== ui.search.token) return;
+      ui.search = { ...ui.search, loadingMore: false, moreError: (err && err.message) || "加载更多失败" };
+    }
+    const top = view.scrollTop;
+    renderSearchPage();
+    view.scrollTop = top;
   }
 
   function submitSearch(term) {
@@ -1145,6 +1185,9 @@
       case "retrySearch":
         ui.search.key = "";
         runSearch(ui.route.query.get("q") || "", ui.route.query.get("src") || "kw");
+        break;
+      case "loadMore":
+        loadMoreSearch();
         break;
 
       case "playAll": {

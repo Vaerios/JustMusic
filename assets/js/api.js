@@ -178,12 +178,12 @@
     return normalizeKuwo(body.data);
   }
 
-  async function kuwoSearch(keyword, count = 12) {
+  async function kuwoSearch(keyword, count = 12, offset = 0) {
     const q = String(keyword || "").trim();
     if (!q) return [];
-    return cached("kw-search:" + q + ":" + count, 5 * 60 * 1000, async () => {
+    return cached("kw-search:" + q + ":" + count + ":" + offset, 5 * 60 * 1000, async () => {
       const jobs = [];
-      for (let i = 1; i <= count; i++) {
+      for (let i = offset + 1; i <= offset + count; i++) {
         jobs.push(
           kuwoOne(q, i, "320k").catch(() => null)
         );
@@ -196,6 +196,7 @@
         seen.add(t.key);
         out.push(t);
       });
+      if (!out.length && offset > 0) return [];
       if (!out.length) throw new Error("没有找到相关歌曲，换个关键词试试");
       return out;
     });
@@ -299,7 +300,10 @@
     return cached(key, 5 * 60 * 1000, async () => {
       const path = VKEYS_PATH[source] || source;
       const quality = source === "wy" ? "&quality=2" : "";
-      const url = `${VKEYS}/${path}?word=${encodeURIComponent(q)}&num=${count}&page=${page}${quality}`;
+      // Netease's "page" is really an offset (page 2 overlaps page 1 by 19
+      // items), so walk it by whole pages. Tencent uses a real page number.
+      const apiPage = source === "wy" ? (page - 1) * count + 1 : page;
+      const url = `${VKEYS}/${path}?word=${encodeURIComponent(q)}&num=${count}&page=${apiPage}${quality}`;
       let body;
       try {
         body = await limit(() => getJSON(url));
@@ -310,6 +314,8 @@
       }
       const list = body && Array.isArray(body.data) ? body.data : [];
       if (!list.length) {
+        // Page 2+ returning nothing just means the result set ended.
+        if (page > 1) return [];
         throw new Error((body && body.message) || "没有找到相关歌曲，换个关键词试试");
       }
       return list.map((item) => normalizeVkeys(item, source)).filter(Boolean);
@@ -540,12 +546,14 @@
   }
 
   /* ---------------- search entry ---------------- */
-  async function search(source, keyword) {
-    if (source === "kw") return kuwoSearch(keyword, 12);
+  async function search(source, keyword, page) {
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    if (source === "kw") return kuwoSearch(keyword, 12, (pg - 1) * 12);
     if (source === "wy" || source === "tx") {
       try {
-        return await vkeysSearch(source, keyword, 20);
+        return await vkeysSearch(source, keyword, 20, pg);
       } catch (err) {
+        if (pg > 1) throw err;
         try {
           return await metingSearch(source, keyword, 20);
         } catch (fallbackErr) {
