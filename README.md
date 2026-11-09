@@ -24,9 +24,14 @@ QQ / 网易云 / 酷我 / 咪咕 / 汽水，点某一首就用它自己的音源
   （10 首、总共 600 首，首条就是春庭雪—邓寓君）；酷我搜索主路改成酷我官方
   `search.kuwo.cn/r.s`（一次返回 10 首，不再靠 oiapi 每页 1 首循环）。
   官方接口浏览器 fetch 很可能被 CORS 拦，所以先 fetch、失败走 JSONP
-  （动态创建 script 标签，`&callback=` 唯一回调名，10 秒超时清理）。
+  （动态创建 script 标签，唯一回调名，10 秒超时清理）。
   oiapi 只留作回退：实测 oiapi QQ 返回 code -403“该Api暂时无法访问，可能在维护中”，
   这就是 v2 里 QQ 为 0 的原因。
+- **v3.1（2026-11-09 15:24）QQ JSONP 参数修正**：v3.0 的 QQ 搜索用了
+  `format=json + callback=`，但 QQ 在 `format=json` 下返回纯 JSON，script 标签
+  加载会失败，所以 15:22 线上实测 QQ 仍为 0。已改成 `format=jsonp + jsonpCallback=`
+  （15:23 直接打开验证：返回 `test123({...})`，code 0，10 首，首条春庭雪—邓寓君）。
+  酷我不受影响（官方搜索已能返回 8 首并播放）。
 - **汽水加一次重试**：实测 `api-vehicle.volcengine.com` 直接打开是通的
   （code 0，10 条），接口本身没挂；v2 线上 Failed to fetch 很可能是
   浏览器 fetch 被 CORS 拦或瞬时失败，所以保留这路并失败后 500ms 重试一次。

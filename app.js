@@ -311,14 +311,15 @@ async function searchWyFallback(keyword, limit) {
 }
 
 // QQ 主路（v3，2026-11-09 15:15 实测可用）：QQ 官方搜索
-// GET https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=<关键词>&p=1&n=10&format=json
-// 返回 {code:0, data:{song:{list:[{name, singer:[{name}], album:{name}, songmid, songid, interval（秒）}], totalnum}}}
+// GET https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=<关键词>&p=1&n=10&format=jsonp&jsonpCallback=<回调名>
+// 返回 <回调名>({code:0, data:{song:{list:[{name, singer:[{name}], album:{name}, songmid, songid, interval（秒）}], totalnum}}})
 // 实测搜“春庭雪”：code 0，10 首，总共 600 首，首条就是春庭雪—邓寓君(等什么君)。
-// 浏览器 fetch 很可能被 CORS 拦，所以先 fetch、失败走 JSONP。id 用 songmid（取链用）。
+// 注意：QQ 在 format=json 下返回纯 JSON，script 标签加载会失败，所以 JSONP 必须用 format=jsonp + jsonpCallback 参数
+// （v3.0 的 format=json + callback 就是这么在线上失败的，2026-11-09 15:22 实测 QQ 仍为 0）。id 用 songmid（取链用）。
 async function searchTxOfficial(keyword, limit) {
   const url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=' + encodeURIComponent(keyword) +
-    '&p=1&n=' + limit + '&format=json';
-  const body = await fetchThenJsonp(url, 10000, 'callback');
+    '&p=1&n=' + limit + '&format=jsonp';
+  const body = await fetchThenJsonp(url, 10000, 'jsonpCallback');
   if (!body || typeof body !== 'object') throw new Error('搜索失败');
   if (body.code !== undefined && body.code !== 0) throw new Error('搜索失败');
   const items = body && body.data && body.data.song && body.data.song.list;
