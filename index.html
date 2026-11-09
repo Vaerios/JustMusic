@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JustMusic · 在线音乐</title>
+<meta name="description" content="JustMusic —— 一个精致、轻量的在线音乐播放器。搜索、收藏、歌词、歌单，一站听完。">
+<meta name="theme-color" content="#08080a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23fa2d48'/%3E%3Cpath d='M38 16v24.2a8 8 0 1 1-4-6.9V22l16-4v19.2a8 8 0 1 1-4-6.9V14z' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://oiapi.net">
+<link rel="preconnect" href="https://api.vkeys.cn">
+<link rel="preconnect" href="https://kwimg1.kuwo.cn">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.4l8.5 7.2V20a1 1 0 0 1-1 1h-4.9v-6.6H9.4V21H4.5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.6 4.6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.6 4.9a5.4 5.4 0 0 0-7.7 0L12 5.8l-.9-.9a5.4 5.4 0 1 0-7.7 7.7l.9.9L12 21l7.7-7.5.9-.9a5.4 5.4 0 0 0 0-7.7z"/></symbol>
+  <symbol id="i-heart-fill" viewBox="0 0 24 24"><path d="M20.6 4.9a5.4 5.4 0 0 0-7.7 0L12 5.8l-.9-.9a5.4 5.4 0 1 0-7.7 7.7l.9.9L12 21l7.7-7.5.9-.9a5.4 5.4 0 0 0 0-7.7z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.6 2.2"/></symbol>
+  <symbol id="i-library" viewBox="0 0 24 24"><path d="M4 4v16M8.7 4v16M13.4 4.6l5.4 15.1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.4"/><circle cx="9" cy="17" r="2.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.5 5.2a.8.8 0 0 1 1.2-.7l10 6.8a.8.8 0 0 1 0 1.4l-10 6.8a.8.8 0 0 1-1.2-.7z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.4" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18.6 5.2a.8.8 0 0 1 1.2.7v12.2a.8.8 0 0 1-1.2.7l-9-6.1a.8.8 0 0 1 0-1.4z" fill="currentColor" stroke="none"/><rect x="4" y="5" width="2.4" height="14" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5.4 5.2A.8.8 0 0 0 4.2 6v12.2a.8.8 0 0 0 1.2.7l9-6.1a.8.8 0 0 0 0-1.4z" fill="currentColor" stroke="none"/><rect x="17.6" y="5" width="2.4" height="14" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M17 3.5 21 7.4l-4 3.9M17 12.7l4 3.9-4 3.9M3 7.4h3.1c1.5 0 2.9.7 3.8 1.9l4.2 5.9c.9 1.2 2.3 1.9 3.8 1.9H21M3 16.6h3.1c1.5 0 2.9-.7 3.8-1.9l.7-1"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2.6 4 3.9-4 3.9M3.5 11.5V10a4 4 0 0 1 4-4H21M7 21.4l-4-3.9 4-3.9M20.5 12.5V14a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-repeat-one" viewBox="0 0 24 24"><path d="m17 2.6 4 3.9-4 3.9M3.5 11.5V10a4 4 0 0 1 4-4H21M7 21.4l-4-3.9 4-3.9M20.5 12.5V14a4 4 0 0 1-4 4H3M12 10.8l1.4-.9v4.4"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5.5 6.5 9H3v6h3.5L11 18.5z"/><path d="M15 8.8a4.5 4.5 0 0 1 0 6.4M17.8 6a8.4 8.4 0 0 1 0 12"/></symbol>
+  <symbol id="i-volume-x" viewBox="0 0 24 24"><path d="M11 5.5 6.5 9H3v6h3.5L11 18.5zM16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M3.5 6.2h12M3.5 12h12M3.5 17.8h7"/><path d="M17.5 13v7.2M14 16.6h7"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.6" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9.3 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m14.7 6-6 6 6 6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9.3 6 6 6-6 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6.5h16M9.5 3.5h5M6.5 6.5 7.4 20a1 1 0 0 0 1 .9h7.2a1 1 0 0 0 1-.9l.9-13.5M10 10.5v6.5M14 10.5v6.5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18.5V5.8l10-2.2v12.7"/><circle cx="6.4" cy="18.6" r="2.7"/><circle cx="16.4" cy="16.4" r="2.7"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.2 13.7 9l5.8 1.7-5.8 1.7L12 18.2l-1.7-5.8L4.5 10.7 10.3 9zM19 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 18.5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2l2-6 3 12 3-15 3 15 2-6h3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.7 4.6M20 4.5V11h-6.2"/></symbol>
+</svg>
+
+<div class="app">
+  <div class="scrim" id="scrim" data-action="closePanels"></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="主导航">
+    <a class="brand" href="#/home">
+      <span class="brand-mark"><svg class="icon"><use href="#i-wave"/></svg></span>
+      <span class="brand-text">
+        <span class="brand-name">JustMusic</span>
+        <span class="brand-sub">音乐，随心。</span>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a class="nav-link" href="#/home" data-nav="home"><svg class="icon"><use href="#i-home"/></svg><span>现在就听</span></a>
+      <a class="nav-link" href="#/search" data-nav="search"><svg class="icon"><use href="#i-search"/></svg><span>搜索</span></a>
+      <a class="nav-link" href="#/favorites" data-nav="favorites"><svg class="icon"><use href="#i-heart"/></svg><span>收藏</span></a>
+      <a class="nav-link" href="#/recent" data-nav="recent"><svg class="icon"><use href="#i-clock"/></svg><span>最近播放</span></a>
+    </nav>
+
+    <div class="side-head">
+      <span>我的歌单</span>
+      <button class="mini-btn" data-action="createPlaylist" title="新建歌单"><svg class="icon"><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="side-playlists" id="sidePlaylists"></div>
+
+    <div class="side-foot">
+      <div class="source-card" id="sourceCard">
+        <span class="status-dot" id="sourceDot"></span>
+        <div class="source-copy">
+          <strong id="sourceTitle">正在连接音源</strong>
+          <span id="sourceDesc">公开接口 · 无需登录</span>
+        </div>
+        <a class="mini-btn" href="#/settings" title="音源设置"><svg class="icon"><use href="#i-settings"/></svg></a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="content">
+    <header class="topbar">
+      <button class="icon-btn mobile-only" data-action="openSidebar" aria-label="打开菜单"><svg class="icon"><use href="#i-menu"/></svg></button>
+      <div class="history-nav no-mobile">
+        <button class="icon-btn" data-action="historyBack" aria-label="后退"><svg class="icon"><use href="#i-chevron-left"/></svg></button>
+        <button class="icon-btn" data-action="historyForward" aria-label="前进"><svg class="icon"><use href="#i-chevron-right"/></svg></button>
+      </div>
+
+      <h1 class="topbar-title" id="topTitle">现在就听</h1>
+
+      <div class="topbar-search" id="topSearch">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <input id="searchInput" type="search" placeholder="搜索歌曲、歌手或专辑" autocomplete="off" spellcheck="false" aria-label="搜索">
+        <kbd class="no-mobile">⌘K</kbd>
+      </div>
+
+      <button class="icon-btn no-mobile" data-action="toggleTheme" title="切换外观"><svg class="icon" id="themeIcon"><use href="#i-sun"/></svg></button>
+      <button class="avatar" data-action="openSettings" title="设置">J</button>
+    </header>
+
+    <main class="view" id="view" tabindex="-1"></main>
+  </div>
+
+  <footer class="player" id="playerBar" aria-label="播放控制">
+    <div class="player-now">
+      <button class="player-cover" data-action="openNowPlaying" aria-label="打开播放页">
+        <span class="player-art" id="pbArt"></span>
+        <span class="player-cover-hint"><svg class="icon"><use href="#i-chevron-down"/></svg></span>
+      </button>
+      <div class="player-meta">
+        <button class="player-title" data-action="openNowPlaying" id="pbTitle">还没有播放歌曲</button>
+        <div class="player-artist" id="pbArtist">挑一首喜欢的开始</div>
+      </div>
+      <button class="icon-btn like-btn" data-action="likeCurrent" id="pbLike" aria-label="收藏"><svg class="icon"><use href="#i-heart"/></svg></button>
+    </div>
+
+    <div class="player-center">
+      <div class="controls">
+        <button class="icon-btn ctl" data-action="toggleShuffle" id="pbShuffle" title="随机播放"><svg class="icon"><use href="#i-shuffle"/></svg></button>
+        <button class="icon-btn ctl" data-action="prev" title="上一首"><svg class="icon"><use href="#i-prev"/></svg></button>
+        <button class="play-btn" data-action="togglePlay" id="pbPlay" title="播放/暂停"><svg class="icon"><use href="#i-play"/></svg></button>
+        <button class="icon-btn ctl" data-action="next" title="下一首"><svg class="icon"><use href="#i-next"/></svg></button>
+        <button class="icon-btn ctl" data-action="cycleRepeat" id="pbRepeat" title="循环模式"><svg class="icon"><use href="#i-repeat"/></svg></button>
+      </div>
+      <div class="progress-row">
+        <span class="time" id="pbCur">0:00</span>
+        <div class="progress" id="pbProgress" role="slider" tabindex="0" aria-label="播放进度">
+          <div class="progress-track"><div class="progress-fill" id="pbFill"></div><div class="progress-knob"></div></div>
+        </div>
+        <span class="time" id="pbDur">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-right">
+      <button class="icon-btn" data-action="openLyrics" title="歌词"><svg class="icon"><use href="#i-mic"/></svg></button>
+      <button class="icon-btn" data-action="toggleQueue" title="播放队列"><svg class="icon"><use href="#i-queue"/></svg></button>
+      <div class="volume no-mobile">
+        <button class="icon-btn" data-action="toggleMute" id="volBtn" title="静音"><svg class="icon"><use href="#i-volume"/></svg></button>
+        <input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="音量">
+      </div>
+    </div>
+  </footer>
+
+  <section class="np" id="nowPlaying" aria-hidden="true" aria-label="正在播放">
+    <div class="np-bg"><img id="npBg" alt=""></div>
+    <div class="np-veil"></div>
+
+    <header class="np-top">
+      <button class="icon-btn" data-action="closeNowPlaying" aria-label="收起"><svg class="icon"><use href="#i-chevron-down"/></svg></button>
+      <div class="np-source">正在播放 · <span id="npSource">JustMusic</span></div>
+      <button class="icon-btn" data-action="toggleQueue" aria-label="队列"><svg class="icon"><use href="#i-queue"/></svg></button>
+    </header>
+
+    <div class="np-body">
+      <div class="np-left">
+        <div class="np-art-wrap">
+          <div class="np-glow" id="npGlow"></div>
+          <div class="np-art" id="npArt"></div>
+        </div>
+        <div class="np-info">
+          <div class="np-titles">
+            <h2 id="npTitle">还没有播放歌曲</h2>
+            <p id="npArtist">挑一首喜欢的开始</p>
+            <p class="np-album" id="npAlbum"></p>
+          </div>
+          <div class="np-actions">
+            <button class="icon-btn" data-action="likeCurrent" id="npLike" aria-label="收藏"><svg class="icon"><use href="#i-heart"/></svg></button>
+            <button class="icon-btn" data-action="addCurrent" aria-label="添加到歌单"><svg class="icon"><use href="#i-plus"/></svg></button>
+            <button class="icon-btn" data-action="copyLink" aria-label="复制链接"><svg class="icon"><use href="#i-external"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="np-right">
+        <div class="np-right-head">
+          <span>歌词</span>
+          <span class="np-quality" id="npQuality"></span>
+        </div>
+        <div class="lyrics" id="lyrics">
+          <div class="lyrics-inner" id="lyricsInner">
+            <p class="lyric-empty">播放歌曲后，歌词会在这里滚动。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="np-foot">
+      <div class="np-progress">
+        <span class="time" id="npCur">0:00</span>
+        <div class="progress" id="npProgress" role="slider" tabindex="0" aria-label="播放进度">
+          <div class="progress-track"><div class="progress-fill" id="npFill"></div><div class="progress-knob"></div></div>
+        </div>
+        <span class="time" id="npDur">0:00</span>
+      </div>
+      <div class="np-controls">
+        <button class="icon-btn" data-action="toggleShuffle" id="npShuffle"><svg class="icon"><use href="#i-shuffle"/></svg></button>
+        <button class="icon-btn" data-action="prev"><svg class="icon"><use href="#i-prev"/></svg></button>
+        <button class="play-btn large" data-action="togglePlay" id="npPlay"><svg class="icon"><use href="#i-play"/></svg></button>
+        <button class="icon-btn" data-action="next"><svg class="icon"><use href="#i-next"/></svg></button>
+        <button class="icon-btn" data-action="cycleRepeat" id="npRepeat"><svg class="icon"><use href="#i-repeat"/></svg></button>
+      </div>
+      <div class="np-foot-right">
+        <div class="volume">
+          <button class="icon-btn" data-action="toggleMute"><svg class="icon"><use href="#i-volume"/></svg></button>
+          <input class="vol-range" id="volRange2" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="音量">
+        </div>
+      </div>
+    </footer>
+  </section>
+
+  <aside class="queue" id="queuePanel" aria-hidden="true" aria-label="播放队列">
+    <header class="queue-head">
+      <div>
+        <span class="kicker">播放队列</span>
+        <h2>接下来</h2>
+      </div>
+      <button class="icon-btn" data-action="closeQueue" aria-label="关闭队列"><svg class="icon"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="queue-list" id="queueList"></div>
+  </aside>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="modal-root" id="modalRoot"></div>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+
+<noscript><p style="padding:40px;color:#fff">这个音乐播放器需要启用 JavaScript。</p></noscript>
+
+<script src="assets/js/store.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/lx-bundled.js"></script>
+<script src="assets/js/lx-source.js"></script>
+<script src="assets/js/player.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
