@@ -1,5 +1,8 @@
 'use strict';
 /*
+ * JustMusic v3 — Apple Music 风格改版（浅色、左侧栏、红色点缀）。
+ * 搜索 / 播放逻辑与 v2 完全一致，只改了界面，另加每源状态显示
+ * （搜索后每源一行 ✓ 有结果 / ✗ 暂无结果，数据来自 Promise.allSettled，不发新请求）。
  * JustMusic v2 — 纯静态多源听歌页，无构建、无后端、无 lx 运行时。
  * 音源逻辑改编自 Mac-XK/KMusic 仓库根目录的「非常刀.js」v5
  * （lx-music 格式脚本，原脚本用 globalThis.lx.request()；
@@ -14,6 +17,15 @@
  * 主线是各源自己的搜索：网易云 CHKSZ、酷我 / 咪咕 oiapi 循环
  * （每页 1 首，v2 扩到 10 页）、汽水不变；QQ 再加一路
  * oiapi QQ 搜索。星海 types=search 成功就合并去重，失败就忽略。
+ *
+ * v3 搜索改动（2026-11-09 15:15–15:16 实测搜“春庭雪”）：
+ * QQ 主路改走 QQ 官方 client_search_cp（先 fetch、失败走 JSONP），
+ * oiapi QQ 返回 code -403“该Api暂时无法访问，可能在维护中”，只留作回退；
+ * 酷我主路改走酷我官方 search.kuwo.cn/r.s，一次返回 10 首（先 fetch、失败走 JSONP），
+ * oiapi 循环只留作回退；汽水接口本身是通的，加一次重试；
+ * 网易云：星海 VIP 返回 {"detail":"Invalid request."}，CHKSZ 仍超时、
+ * 星海普通版 503——目前没有能用的公开搜索接口，CHKSZ / 星海只作回退尝试，
+ * 最稳的办法是用户自己部署 NeteaseCloudMusicApi 后在设置里填地址。
  *
  * 注意：本站不嵌入任何 API Key。QQ 取链首选星海
  * types=url&source=tencent（恢复后可用），失败就明确报错，
@@ -177,6 +189,52 @@ async function httpGet(url, timeoutMs) {
   }
 }
 
+// ---------- JSONP：官方接口常拦浏览器 fetch（CORS），先 fetch、失败再走 JSONP ----------
+// 动态创建 script 标签，URL 追加 &callback=<唯一回调名>，10 秒超时后清理 script 和全局回调。
+function jsonp(url, timeoutMs, callbackParam) {
+  const timeout = timeoutMs || 10000;
+  return new Promise(function (resolve, reject) {
+    const cbName = 'justmusic_jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+    const script = document.createElement('script');
+    let done = false;
+    function cleanup() {
+      try { delete window[cbName]; } catch (_) { window[cbName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    const timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error('JSONP 超时'));
+    }, timeout);
+    window[cbName] = function (data) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error('JSONP 加载失败'));
+    };
+    const sep = url.indexOf('?') === -1 ? '?' : '&';
+    script.src = url + sep + (callbackParam || 'callback') + '=' + cbName;
+    document.head.appendChild(script);
+  });
+}
+// 先 fetch，失败（跨域 / 超时 / 非 200）再走 JSONP；两路都失败才抛错。
+async function fetchThenJsonp(url, timeoutMs, callbackParam) {
+  try {
+    return await httpGet(url, timeoutMs);
+  } catch (e) {
+    return await jsonp(url, timeoutMs, callbackParam);
+  }
+}
+
 // 按“歌名 + 歌手”去重（同一源内星海结果和兜底结果可能重合），保留先出现的。
 function dedupeSongs(list) {
   const seen = new Set();
@@ -252,7 +310,41 @@ async function searchWyFallback(keyword, limit) {
   });
 }
 
-// QQ 兜底（不嵌 Key）：GET {oiapi}/QQ_Music?keyword=<enc>&limit=10
+// QQ 主路（v3，2026-11-09 15:15 实测可用）：QQ 官方搜索
+// GET https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=<关键词>&p=1&n=10&format=json
+// 返回 {code:0, data:{song:{list:[{name, singer:[{name}], album:{name}, songmid, songid, interval（秒）}], totalnum}}}
+// 实测搜“春庭雪”：code 0，10 首，总共 600 首，首条就是春庭雪—邓寓君(等什么君)。
+// 浏览器 fetch 很可能被 CORS 拦，所以先 fetch、失败走 JSONP。id 用 songmid（取链用）。
+async function searchTxOfficial(keyword, limit) {
+  const url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=' + encodeURIComponent(keyword) +
+    '&p=1&n=' + limit + '&format=json';
+  const body = await fetchThenJsonp(url, 10000, 'callback');
+  if (!body || typeof body !== 'object') throw new Error('搜索失败');
+  if (body.code !== undefined && body.code !== 0) throw new Error('搜索失败');
+  const items = body && body.data && body.data.song && body.data.song.list;
+  if (!Array.isArray(items) || !items.length) throw new Error('未找到相关歌曲');
+  return items.slice(0, limit).map(function (s) {
+    const singer = Array.isArray(s.singer)
+      ? s.singer.map(function (a) { return typeof a === 'string' ? a : ((a && a.name) || ''); }).filter(Boolean).join(' / ')
+      : String(s.singer || '');
+    return {
+      name: s.name || '',
+      singer: singer,
+      albumName: (s.album && s.album.name) || '',
+      id: String(s.songmid || s.songid || ''),
+      numericId: String(s.songid || ''),
+      lyric_id: String(s.songmid || s.songid || ''),
+      source: 'tx',
+      duration: s.interval,
+      durationText: formatDuration(s.interval),
+      pic: '',
+    };
+  }).filter(function (s) { return s.name && s.id; });
+}
+
+// QQ 回退（不嵌 Key）：GET {oiapi}/QQ_Music?keyword=<enc>&limit=10
+// 2026-11-09 15:15 实测返回 code -403“该Api暂时无法访问，可能在维护中”，0 首——
+// 这就是 v2 里 QQ 为 0 的原因。只留作回退，主路已改走 QQ 官方。
 // 返回 {data:[{name, singer（数组）, album, mid, id, duration, image}]}
 async function searchTxOiapi(keyword, limit) {
   const body = await httpGet(
@@ -280,9 +372,37 @@ async function searchTxOiapi(keyword, limit) {
   }).filter(function (s) { return s.name && s.id; });
 }
 
-// 酷我兜底：每页只返回一首，循环 1..10 页收集（v1 只循环 3 页，所以最多 3 首）
+// 酷我主路（v3，2026-11-09 15:15 实测可用）：酷我官方搜索，一次返回 10 首
+// GET https://search.kuwo.cn/r.s?all=<关键词>&ft=music&itemset=web_2013&client=kt&pn=0&rn=10&rformat=json&encoding=utf8
+// 返回 {TOTAL, abslist:[{SONGNAME, ARTIST, ALBUM, MUSICRID, DURATION（秒）}]}
+// 实测搜“春庭雪”：TOTAL 256，10 首，首条是春庭雪(DJ版)—DJ朱宸霄。
+// 浏览器 fetch 可能被 CORS 拦，先 fetch、失败走 JSONP（加 callback 参数）。
+// MUSICRID 形如 "MUSIC_123456"，取链用的 id 只留数字部分（与原来 oiapi 的 rid 一致）。
+async function searchKwOfficial(keyword, limit) {
+  const url = 'https://search.kuwo.cn/r.s?all=' + encodeURIComponent(keyword) +
+    '&ft=music&itemset=web_2013&client=kt&pn=0&rn=' + limit + '&rformat=json&encoding=utf8';
+  const body = await fetchThenJsonp(url, 10000, 'callback');
+  const items = (body && body.abslist) || (body && body.data && body.data.abslist) || [];
+  if (!Array.isArray(items) || !items.length) throw new Error('未找到相关歌曲');
+  return items.slice(0, limit).map(function (s) {
+    const rid = String(s.MUSICRID || s.rid || '').replace(/^MUSIC_/, '');
+    return {
+      name: s.SONGNAME || s.name || '',
+      singer: s.ARTIST || s.singer || '',
+      albumName: s.ALBUM || s.album || '',
+      id: rid,
+      lyric_id: rid,
+      source: 'kw',
+      duration: s.DURATION,
+      durationText: formatDuration(s.DURATION),
+      pic: s.PIC || s.pic || '',
+    };
+  }).filter(function (s) { return s.name && s.id; });
+}
+
+// 酷我回退：oiapi 每页只返回一首，循环 1..10 页收集（v1 只循环 3 页，所以最多 3 首）
 // GET {oiapi}/Kuwo?msg=<enc>&n=<page> -> {data:{song,singer,album,rid,duration}}
-async function searchKwFallback(keyword, limit) {
+async function searchKwOiapiLoop(keyword, limit) {
   const results = [];
   for (let page = 1; results.length < limit && page <= 10; page++) {
     try {
@@ -302,6 +422,15 @@ async function searchKwFallback(keyword, limit) {
   }
   if (!results.length) throw new Error('未找到相关歌曲');
   return results;
+}
+
+// 酷我：官方主路先试，失败再走 oiapi 循环回退
+async function searchKwFallback(keyword, limit) {
+  try {
+    return await searchKwOfficial(keyword, limit);
+  } catch (_) {
+    return await searchKwOiapiLoop(keyword, limit);
+  }
 }
 
 // 咪咕兜底：每页只返回一首，循环 1..10 页收集
@@ -334,26 +463,37 @@ async function searchMgFallback(keyword, limit) {
 }
 
 // 汽水：GET {QISHUI_SEARCH_API}?keyword=<enc>&search_type=music&limit=10&real_offset=0&search_source=qishui
+// 2026-11-09 15:15 实测直接打开是通的（code 0，10 条，首条是 DJ 翻唱版），接口本身没挂；
+// v2 线上 Failed to fetch 很可能是浏览器 fetch 被 CORS 拦或瞬时失败，所以保留这路并加一次重试。
 async function searchQs(keyword, limit) {
-  const body = await httpGet(
-    QISHUI_SEARCH_API + '?keyword=' + encodeURIComponent(keyword) +
-    '&search_type=music&limit=' + limit + '&real_offset=0&search_source=qishui', 10000
-  );
-  const items = body && body.data && body.data.list;
-  if (!Array.isArray(items) || !items.length) throw new Error('未找到相关歌曲');
-  return items.slice(0, limit).map(function (s) {
-    return {
-      name: s.title || '',
-      singer: (s.author_info && s.author_info.name) || '',
-      albumName: '',
-      id: String(s.item_id),
-      lyric_id: String(s.item_id),
-      source: 'qs',
-      duration: s.duration,
-      durationText: formatDuration(s.duration),
-      pic: s.cover_url || '',
-    };
-  });
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const body = await httpGet(
+        QISHUI_SEARCH_API + '?keyword=' + encodeURIComponent(keyword) +
+        '&search_type=music&limit=' + limit + '&real_offset=0&search_source=qishui', 10000
+      );
+      const items = body && body.data && body.data.list;
+      if (!Array.isArray(items) || !items.length) throw new Error('未找到相关歌曲');
+      return items.slice(0, limit).map(function (s) {
+        return {
+          name: s.title || '',
+          singer: (s.author_info && s.author_info.name) || '',
+          albumName: '',
+          id: String(s.item_id),
+          lyric_id: String(s.item_id),
+          source: 'qs',
+          duration: s.duration,
+          durationText: formatDuration(s.duration),
+          pic: s.cover_url || '',
+        };
+      });
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 0) await new Promise(function (r) { setTimeout(r, 500); });
+    }
+  }
+  throw lastErr || new Error('未找到相关歌曲');
 }
 
 // 单源聚合：星海和本源搜索并行跑，成功就合并去重、截到 10 首；
@@ -368,7 +508,7 @@ async function searchOneSource(sourceKey, keyword) {
   const attempts = [];
   if (XINGHAI_SRC[sourceKey]) attempts.push(searchXinghai(sourceKey, keyword, limit));
   if (sourceKey === 'wy') attempts.push(searchWyFallback(keyword, limit));
-  else if (sourceKey === 'tx') attempts.push(searchTxOiapi(keyword, limit));
+  else if (sourceKey === 'tx') { attempts.unshift(searchTxOfficial(keyword, limit)); attempts.push(searchTxOiapi(keyword, limit)); }
   else if (sourceKey === 'kw') attempts.push(searchKwFallback(keyword, limit));
   else if (sourceKey === 'mg') attempts.push(searchMgFallback(keyword, limit));
   const settled = await Promise.allSettled(attempts);
@@ -650,6 +790,27 @@ function setStatus(text, kind) {
   statusEl.textContent = text;
   statusEl.className = 'status' + (kind ? ' ' + kind : '');
 }
+
+// v3：每源状态行 + 侧栏圆点（数据来自 Promise.allSettled 的 counts，不发新请求）
+function updateSourceStatus(counts) {
+  const line = $('sourceStatus');
+  if (line) {
+    line.innerHTML = SOURCES.map(function (s) {
+      const n = counts[s.key] || 0;
+      return n > 0
+        ? '<span class="src-ok">' + esc(SOURCE_NAME[s.key]) + ' ✓ 有结果（' + n + '首）</span>'
+        : '<span class="src-bad">' + esc(SOURCE_NAME[s.key]) + ' ✗ 暂无结果（接口问题）</span>';
+    }).join('<span class="src-sep"> · </span>');
+  }
+  SOURCES.forEach(function (s) {
+    const cap = s.key[0].toUpperCase() + s.key.slice(1);
+    const dot = $('dot' + cap);
+    const cnt = $('count' + cap);
+    const n = counts[s.key] || 0;
+    if (dot) dot.className = 'src-dot' + (n > 0 ? ' ok' : ' bad');
+    if (cnt) cnt.textContent = n > 0 ? n + '首' : '—';
+  });
+}
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -826,6 +987,7 @@ async function doSearch() {
     counts[s.key] = (r.status === 'fulfilled' && Array.isArray(r.value)) ? r.value.length : 0;
     if (r.status === 'fulfilled' && Array.isArray(r.value)) allResults.push.apply(allResults, r.value);
   });
+  updateSourceStatus(counts);
   currentSong = null;
   currentIndex = -1;
   currentLyrics = [];
@@ -862,6 +1024,20 @@ document.querySelectorAll('.filter-chip').forEach(function (chip) {
     renderResults();
   });
 });
+
+// v3：侧栏导航（视觉导航，不新增功能；收藏暂未上线）
+document.querySelectorAll('.nav-item').forEach(function (item) {
+  item.addEventListener('click', function () {
+    document.querySelectorAll('.nav-item').forEach(function (i) { i.classList.remove('active'); });
+    item.classList.add('active');
+  });
+});
+const navBrowse = $('navBrowse');
+if (navBrowse) navBrowse.addEventListener('click', function () { document.querySelector('.results-wrap').scrollIntoView({ behavior: 'smooth' }); });
+const navSearch = $('navSearch');
+if (navSearch) navSearch.addEventListener('click', function () { searchInput.focus(); searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+const navFav = $('navFav');
+if (navFav) navFav.addEventListener('click', function () { setStatus('我的收藏暂未上线，先搜歌听歌吧。'); });
 
 document.querySelectorAll('.chip').forEach(function (chip) {
   chip.addEventListener('click', function () {

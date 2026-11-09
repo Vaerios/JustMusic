@@ -1,10 +1,39 @@
-# JustMusic — 在线听歌（v2）
+# JustMusic — 在线听歌（v3）
 
 一个纯静态的多源在线听歌页面：输入歌名或歌手，一次搜索同时查
 QQ / 网易云 / 酷我 / 咪咕 / 汽水，点某一首就用它自己的音源解析播放，
 歌词显示在“正在播放”卡片里。
 没有后端、没有构建步骤，只有 `index.html` + `app.js` + `style.css`，
 可以直接部署到 GitHub Pages。
+
+## v3 改了什么（Apple Music 风格改版）
+
+- **外观**：Apple Music 风格——浅色（页面 `#f5f5f7`、卡片白色、文字近黑
+  `#1d1d1f`、次要文字 `#6e6e73`、细线 `#d2d2d7`、点缀红 `#fa2d48`），
+  大标题（28px 加粗）、左侧 240px 侧栏（浏览 / 搜索 / 我的收藏 +
+  音源列表，绿点有结果、红点暂无结果）、56px 圆角封面、悬停显示红色圆形播放键。
+  移动端侧栏收成顶栏，单列。歌词仍在“正在播放”卡片内（桌面在卡片右侧，
+  移动端在歌曲信息下方），当前行红色加粗；底部播放器白色毛玻璃、黑色播放键、红色进度条。
+  **搜索 / 播放逻辑与 v2 完全一致**，只改了界面。
+- **每源状态显示**：搜索后搜索框下方会逐源显示“✓ 有结果（n首）”或
+  “✗ 暂无结果（接口问题）”，侧栏音源列表的圆点和数量同步更新。
+  这是聚合搜索本来就有的数据（`Promise.allSettled` 的结果），只是展示出来，
+  让用户一眼看到是哪个源没返回结果、为什么。
+- **QQ / 酷我改走官方接口**（2026-11-09 15:15–15:16 实测搜“春庭雪”）：
+  QQ 搜索主路改成 QQ 官方 `c.y.qq.com/soso/fcgi-bin/client_search_cp`
+  （10 首、总共 600 首，首条就是春庭雪—邓寓君）；酷我搜索主路改成酷我官方
+  `search.kuwo.cn/r.s`（一次返回 10 首，不再靠 oiapi 每页 1 首循环）。
+  官方接口浏览器 fetch 很可能被 CORS 拦，所以先 fetch、失败走 JSONP
+  （动态创建 script 标签，`&callback=` 唯一回调名，10 秒超时清理）。
+  oiapi 只留作回退：实测 oiapi QQ 返回 code -403“该Api暂时无法访问，可能在维护中”，
+  这就是 v2 里 QQ 为 0 的原因。
+- **汽水加一次重试**：实测 `api-vehicle.volcengine.com` 直接打开是通的
+  （code 0，10 条），接口本身没挂；v2 线上 Failed to fetch 很可能是
+  浏览器 fetch 被 CORS 拦或瞬时失败，所以保留这路并失败后 500ms 重试一次。
+- **网易云如实说明**：星海 VIP 返回 `{"detail":"Invalid request."}`，
+  CHKSZ 仍连接超时、星海普通版 503，目前没有能用的公开搜索接口。
+  CHKSZ / 星海仍作为回退继续尝试，不假装网易云已修好；最稳的办法是
+  用户自己部署 NeteaseCloudMusicApi 后在设置里填地址。
 
 ## 为什么 v1 只显示 3 首
 
@@ -44,9 +73,9 @@ oiapi 接口每页只返回 1 首歌，v1 只循环了 3 页，所以一次最�
 
 | 音源 | 主线搜索 | 星海补充搜索 |
 | --- | --- | --- |
-| QQ音乐 `tx` | `oiapi.net/api/QQ_Music?keyword=&limit=10` | 星海 `types=search&source=tencent`（实测不稳定，见下） |
-| 网易云 `wy` | `api.chksz.top/api/163_search?keyword=&limit=10`（仍超时，仅作回退） | 星海 `types=search&source=netease` |
-| 酷我 `kw` | `oiapi.net/api/Kuwo?msg=&n=<页>`，循环 1–10 页（每页 1 首） | 星海 `types=search&source=kuwo` |
+| QQ音乐 `tx` | QQ 官方 `c.y.qq.com/soso/fcgi-bin/client_search_cp?w=&p=1&n=10&format=json`（先 fetch、失败走 JSONP） | oiapi `QQ_Music?keyword=`（-403 维护中，仅回退）；星海 `types=search&source=tencent`（不稳定） |
+| 网易云 `wy` | `api.chksz.top/api/163_search?keyword=&limit=10`（仍超时，仅作回退） | 星海 `types=search&source=netease`（503，不稳定）；目前无可用公开搜索接口 |
+| 酷我 `kw` | 酷我官方 `search.kuwo.cn/r.s?all=&ft=music&pn=0&rn=10&rformat=json`（一次 10 首，先 fetch、失败走 JSONP） | oiapi `Kuwo?msg=&n=<页>` 循环 1–10 页（仅回退）；星海 `types=search&source=kuwo` |
 | 咪咕 `mg` | `api.xcvts.cn/api/music/migu?gm=&n=<页>`，循环 1–10 页（每页 1 首） | 星海 `types=search&source=migu` |
 | 汽水 `qs` | `api-vehicle.volcengine.com/v2/search/type?keyword=&search_type=music&limit=10` | 无星海源 |
 
@@ -129,6 +158,6 @@ oiapi 接口每页只返回 1 首歌，v1 只循环了 3 页，所以一次最�
 | --- | --- |
 | `index.html` | 页面结构：搜索框、音质、热门搜索、筛选、分组结果列表、正在播放卡片（内含歌词）、底部播放器、接口设置 |
 | `app.js` | 全部逻辑：聚合搜索、去重、取链竞速、缓存、歌词、播放控制、设置 |
-| `style.css` | 深色毛玻璃样式，单列布局，移动端适配 |
+| `style.css` | Apple Music 风格：浅色、左侧栏、红色点缀，移动端适配 |
 | `README.md` | 本文件 |
 | `.nojekyll` | 空文件，告诉 GitHub Pages 不要用 Jekyll 处理 |
