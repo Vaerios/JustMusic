@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>JustMusic — 在线听歌</title>
-<meta name="description" content="JustMusic：多源在线听歌，搜索网易云 / 酷我 / 咪咕 / 汽水音乐并播放。纯静态页面，可部署到 GitHub Pages。">
+<meta name="description" content="JustMusic：多源在线听歌，一次搜索聚合 QQ / 网易云 / 酷我 / 咪咕 / 汽水音乐，点歌用对应音源解析播放。纯静态页面，可部署到 GitHub Pages。">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,13 +26,6 @@
       <button id="searchBtn" type="button">搜索</button>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="音源">
-      <button class="tab" type="button" data-source="wy" role="tab" aria-selected="false">网易云</button>
-      <button class="tab active" type="button" data-source="kw" role="tab" aria-selected="true">酷我</button>
-      <button class="tab" type="button" data-source="mg" role="tab" aria-selected="false">咪咕</button>
-      <button class="tab" type="button" data-source="qs" role="tab" aria-selected="false">汽水</button>
-    </div>
-
     <div class="controls-row">
       <label class="quality-label">音质
         <select id="qualitySelect" aria-label="音质">
@@ -52,32 +45,52 @@
       </div>
     </div>
 
-    <p id="status" class="status" role="status" aria-live="polite">输入歌名或歌手，点击搜索开始听歌。</p>
+    <p id="status" class="status" role="status" aria-live="polite">输入歌名或歌手，点击搜索开始听歌。一次搜索会同时查 QQ / 网易云 / 酷我 / 咪咕 / 汽水。</p>
   </section>
 
-  <section class="content">
-    <div class="results-wrap">
+  <section class="results-wrap" aria-label="搜索结果">
+    <div class="results-head">
       <h2>搜索结果</h2>
-      <ul id="resultsList" class="results"></ul>
-      <p id="emptyHint" class="empty-hint">还没有搜索结果。换个关键词或换个音源试试。</p>
-    </div>
-
-    <aside class="lyrics-wrap" aria-label="歌词">
-      <h2>歌词</h2>
-      <div id="lyricsPanel" class="lyrics-panel">
-        <p class="lyrics-empty">暂无歌词</p>
+      <div class="filters" id="filterChips" role="group" aria-label="按音源筛选">
+        <button type="button" class="filter-chip active" data-filter="all">全部</button>
+        <button type="button" class="filter-chip" data-filter="tx">QQ</button>
+        <button type="button" class="filter-chip" data-filter="wy">网易云</button>
+        <button type="button" class="filter-chip" data-filter="kw">酷我</button>
+        <button type="button" class="filter-chip" data-filter="mg">咪咕</button>
+        <button type="button" class="filter-chip" data-filter="qs">汽水</button>
       </div>
-      <p class="lyrics-note">只有汽水音源保证提供歌词，其他音源显示“暂无歌词”属正常情况。</p>
-    </aside>
+    </div>
+    <p class="filter-note">筛选只过滤已搜到的结果，不会重新搜索。</p>
+    <div id="resultsContainer"></div>
+    <p id="emptyHint" class="empty-hint">还没有搜索结果。换个关键词试试。</p>
+  </section>
+
+  <section class="now-playing-card" id="nowPlayingCard" aria-label="正在播放">
+    <div class="np-head">
+      <img id="nowPlayingCover" class="np-cover" src="" alt="" hidden>
+      <div class="np-cover-placeholder" id="nowPlayingCoverPlaceholder" aria-hidden="true">♪</div>
+      <div class="np-meta">
+        <strong id="nowPlayingName">未在播放</strong>
+        <span id="nowPlayingSinger">搜一首歌，点它开始播放，歌词会在这里显示</span>
+        <span class="np-badges">
+          <span id="nowPlayingBadge" class="badge" hidden></span>
+          <span id="nowPlayingQuality" class="quality-text"></span>
+        </span>
+      </div>
+    </div>
+    <div id="lyricsPanel" class="lyrics-panel">
+      <p class="lyrics-empty">搜一首歌，点它开始播放，歌词会在这里显示</p>
+    </div>
+    <p class="lyrics-note">歌词优先走星海歌词接口；汽水走汽水 H5。没有歌词时会显示“暂无歌词”。</p>
   </section>
 
   <details class="settings">
     <summary>接口设置（可改 API 地址）</summary>
-    <p class="settings-note">改完点“保存设置”后生效，保存在本机浏览器（localStorage）里，不会上传。汽水搜索 / H5 与长青 / 念心模板地址写在 <code>app.js</code> 顶部的常量中，可直接改代码。</p>
+    <p class="settings-note">星海是现在的主要聚合搜索接口（一次搜索同时查 QQ / 网易云 / 酷我 / 咪咕）。改完点“保存设置”后生效，保存在本机浏览器（localStorage）里，不会上传。汽水搜索 / H5 与长青 / 念心模板地址写在 <code>app.js</code> 顶部的常量中，可直接改代码。</p>
     <label>CHKSZ（网易云搜索 / 直链）
       <input id="cfgChksz" type="url" inputmode="url">
     </label>
-    <label>星海（全平台直链）
+    <label>星海（聚合搜索 / 全平台直链 / 歌词）
       <input id="cfgXinghai" type="text">
     </label>
     <label>溯音 oiapi（网易 / 酷我）
